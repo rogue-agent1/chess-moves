@@ -1,90 +1,93 @@
-import argparse
+#!/usr/bin/env python3
+"""Chess move generator and board representation."""
+import sys
 
-PIECES = {"K": "♔", "Q": "♕", "R": "♖", "B": "♗", "N": "♘", "P": "♙",
-          "k": "♚", "q": "♛", "r": "♜", "b": "♝", "n": "♞", "p": "♟"}
+PIECES = {"K": "king", "Q": "queen", "R": "rook", "B": "bishop", "N": "knight", "P": "pawn"}
 
-def parse_fen(fen):
-    board = [[None]*8 for _ in range(8)]
-    rows = fen.split("/")
-    for r, row in enumerate(rows):
-        c = 0
-        for ch in row:
-            if ch.isdigit(): c += int(ch)
-            else: board[r][c] = ch; c += 1
-    return board
-
-def display(board):
-    print("  a b c d e f g h")
-    for r in range(8):
-        row = f"{8-r} "
+class Board:
+    def __init__(self):
+        self.squares = {}
+        self._setup()
+    def _setup(self):
+        order = "RNBQKBNR"
         for c in range(8):
-            p = board[r][c]
-            if p: row += PIECES.get(p, p) + " "
-            else: row += ("·" if (r+c) % 2 == 0 else "·") + " "
-        print(row + f"{8-r}")
-    print("  a b c d e f g h")
-
-def legal_moves(board, r, c):
-    piece = board[r][c]
-    if not piece: return []
-    moves = []
-    is_white = piece.isupper()
-    def add(nr, nc):
-        if 0 <= nr < 8 and 0 <= nc < 8:
-            target = board[nr][nc]
-            if target is None or target.isupper() != is_white:
-                moves.append((nr, nc))
-                return target is None
-        return False
-    p = piece.upper()
-    if p == "P":
-        d = -1 if is_white else 1
-        if 0 <= r+d < 8 and board[r+d][c] is None: moves.append((r+d, c))
-        for dc in [-1, 1]:
-            if 0 <= r+d < 8 and 0 <= c+dc < 8:
-                t = board[r+d][c+dc]
-                if t and t.isupper() != is_white: moves.append((r+d, c+dc))
-    elif p == "N":
-        for dr, dc in [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]:
-            add(r+dr, c+dc)
-    elif p == "K":
-        for dr in [-1,0,1]:
-            for dc in [-1,0,1]:
-                if dr or dc: add(r+dr, c+dc)
-    else:
-        dirs = []
-        if p in "RQ": dirs += [(0,1),(0,-1),(1,0),(-1,0)]
-        if p in "BQ": dirs += [(1,1),(1,-1),(-1,1),(-1,-1)]
-        for dr, dc in dirs:
-            nr, nc = r+dr, c+dc
-            while 0 <= nr < 8 and 0 <= nc < 8:
-                t = board[nr][nc]
-                if t is None: moves.append((nr, nc))
+            self.squares[(0, c)] = ("w", order[c])
+            self.squares[(1, c)] = ("w", "P")
+            self.squares[(6, c)] = ("b", "P")
+            self.squares[(7, c)] = ("b", order[c])
+    def get(self, r, c):
+        return self.squares.get((r, c))
+    def moves(self, r, c):
+        piece = self.get(r, c)
+        if not piece: return []
+        color, ptype = piece
+        result = []
+        if ptype == "P":
+            d = 1 if color == "w" else -1
+            if 0 <= r+d < 8 and not self.get(r+d, c):
+                result.append((r+d, c))
+                start_row = 1 if color == "w" else 6
+                if r == start_row and not self.get(r+2*d, c):
+                    result.append((r+2*d, c))
+            for dc in (-1, 1):
+                if 0 <= r+d < 8 and 0 <= c+dc < 8:
+                    target = self.get(r+d, c+dc)
+                    if target and target[0] != color:
+                        result.append((r+d, c+dc))
+        elif ptype == "N":
+            for dr, dc in [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]:
+                nr, nc = r+dr, c+dc
+                if 0 <= nr < 8 and 0 <= nc < 8:
+                    target = self.get(nr, nc)
+                    if not target or target[0] != color:
+                        result.append((nr, nc))
+        elif ptype in ("R", "Q", "B", "K"):
+            dirs = []
+            if ptype in ("R", "Q"): dirs += [(0,1),(0,-1),(1,0),(-1,0)]
+            if ptype in ("B", "Q"): dirs += [(1,1),(1,-1),(-1,1),(-1,-1)]
+            if ptype == "K": dirs = [(dr,dc) for dr in (-1,0,1) for dc in (-1,0,1) if (dr,dc)!=(0,0)]
+            for dr, dc in dirs:
+                nr, nc = r+dr, c+dc
+                while 0 <= nr < 8 and 0 <= nc < 8:
+                    target = self.get(nr, nc)
+                    if target:
+                        if target[0] != color: result.append((nr, nc))
+                        break
+                    result.append((nr, nc))
+                    if ptype == "K": break
+                    nr += dr; nc += dc
+        return result
+    def to_string(self):
+        lines = []
+        for r in range(7, -1, -1):
+            row = f"{r+1} "
+            for c in range(8):
+                p = self.get(r, c)
+                if p:
+                    ch = p[1] if p[0] == "w" else p[1].lower()
+                    row += ch + " "
                 else:
-                    if t.isupper() != is_white: moves.append((nr, nc))
-                    break
-                nr += dr; nc += dc
-    return moves
+                    row += ". "
+            lines.append(row)
+        lines.append("  a b c d e f g h")
+        return chr(10).join(lines)
 
-def sq(r, c): return chr(ord("a")+c) + str(8-r)
-
-def main():
-    p = argparse.ArgumentParser(description="Chess move validator")
-    p.add_argument("--fen", default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
-    p.add_argument("--moves", help="Square to show moves for (e.g. e2)")
-    p.add_argument("--display", action="store_true")
-    args = p.parse_args()
-    board = parse_fen(args.fen)
-    if args.display or not args.moves: display(board)
-    if args.moves:
-        c = ord(args.moves[0]) - ord("a")
-        r = 8 - int(args.moves[1])
-        piece = board[r][c]
-        if piece:
-            mvs = legal_moves(board, r, c)
-            print(f"{PIECES.get(piece, piece)} at {args.moves}: {', '.join(sq(mr,mc) for mr,mc in mvs)}")
-        else:
-            print(f"No piece at {args.moves}")
+def test():
+    b = Board()
+    assert b.get(0, 0) == ("w", "R")
+    assert b.get(7, 4) == ("b", "K")
+    # Pawn moves from starting position
+    moves = b.moves(1, 4)  # e2 pawn
+    assert (2, 4) in moves and (3, 4) in moves
+    assert len(moves) == 2
+    # Knight moves
+    moves = b.moves(0, 1)  # b1 knight
+    assert (2, 0) in moves and (2, 2) in moves
+    assert len(moves) == 2
+    s = b.to_string()
+    assert "R" in s
+    print("  chess_moves: ALL TESTS PASSED")
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "test": test()
+    else: print(Board().to_string())

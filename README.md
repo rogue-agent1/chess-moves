@@ -1,9 +1,10 @@
 # chess-moves
 
-Chess move validator and board display. Zero-dependency, single-file Python CLI.
+Single-file Python CLI. Zero dependencies.
 
 ## Usage
 
 ```bash
-python3 chess_moves.py --help
+python3 chess_moves.py
+python3 chess_moves.py test
 ```
